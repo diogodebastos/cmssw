@@ -121,11 +121,11 @@ class Jet(PhysicsObject):
         #    import pdb; pdb.set_trace()
         if name == "POG_PFID":  
 
-            if   self.jetID("PAG_monoID_Tight") and self.jetID("POG_PFID_Tight") : return 5;
-            if   self.jetID("PAG_monoID_Loose") and self.jetID("POG_PFID_Tight") : return 4;
-            if   self.jetID("POG_PFID_Tight")  : return 3;
-            #elif self.jetID("POG_PFID_Medium") : return 2;  commented this line because this working point doesn't exist anymore (as 12/05/15)
-            # elif self.jetID("POG_PFID_Loose")  : return 1;
+            #if   self.jetID("PAG_monoID_Tight") and self.jetID("POG_PFID_Tight") : return 5;
+            #if   self.jetID("PAG_monoID_Loose") and self.jetID("POG_PFID_Tight") : return 4;
+            if   self.jetID("POG_PFID_Tight")  : return 1;
+           # elif self.jetID("POG_PFID_Medium") : return 2;  #commented this line because this working point doesn't exist anymore (as 12/05/15)
+            #elif self.jetID("POG_PFID_Loose")  : return 1;
             else                               : return 0;
         
         # jetID from here: https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetID#Recommendations_for_13_TeV_data
