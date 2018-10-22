@@ -56,7 +56,8 @@ class Looper(object):
                   nPrint=0,
                   timeReport=False,
                   quiet=False,
-                  memCheckFromEvent=-1):
+                  memCheckFromEvent=-1,
+                  stopFlag = None):
         """Handles the processing of an event sample.
         An Analyzer is built for each Config.Analyzer present
         in sequence. The Looper can then be used to process an event,
@@ -68,6 +69,12 @@ class Looper(object):
         nEvents : number of events to process. Defaults to all.
         firstEvent : first event to process. Defaults to the first one.
         nPrint  : number of events to print at the beginning
+    
+        stopFlag: it should be a multiprocessing.Value instance, that is set to 1 
+                  when this thread, or any other, receives a SIGUSR2 to ask for
+                  a graceful job termination. In this case, the looper will also
+                  set up a signal handler for SIGUSR2.
+                  (if set to None, nothing of all this happens)
         """
 
         self.config = config
@@ -89,6 +96,13 @@ class Looper(object):
         self.timeReport = [ {'time':0.0,'events':0} for a in self.analyzers ] if timeReport else False
         self.memReportFirstEvent = memCheckFromEvent
         self.memLast=0
+        self.stopFlag = stopFlag
+        if stopFlag:
+            import signal
+            def doSigUsr2(sig,frame):
+                print 'SIGUSR2 received, signaling graceful stop'
+                self.stopFlag.value = 1
+            signal.signal(signal.SIGUSR2, doSigUsr2)
         tree_name = None
         if( hasattr(self.cfg_comp, 'tree_name') ):
             tree_name = self.cfg_comp.tree_name
@@ -123,10 +137,13 @@ class Looper(object):
         # so that analyzers cannot modify the config of other analyzers. 
         # but cannot copy the autofill config.
         self.setup = Setup(config, services)
+        self.logger.info('looper initialized')
 
     def _build(self, cfg):
+        self.logger.info('building {} ...'.format(cfg.name))
         theClass = cfg.class_object
         obj = theClass( cfg, self.cfg_comp, self.outDir )
+        self.logger.info('done')
         return obj
         
     def _prepareOutput(self, name):
@@ -156,6 +173,7 @@ class Looper(object):
         nEvents = self.nEvents
         firstEvent = self.firstEvent
         iEv = firstEvent
+        self.logger.info('deciding on the number of events (can take a long time for a lot of input files...)')
         if nEvents is None or int(nEvents) > len(self.events) :
             nEvents = len(self.events)
         else:
@@ -167,11 +185,15 @@ class Looper(object):
                                                         eventSize=eventSize))
         self.logger.info( str( self.cfg_comp ) )
         for analyzer in self.analyzers:
+            self.logger.info('starting ' + analyzer.name)
             analyzer.beginLoop(self.setup)
+        self.logger.info('beginLoop done')
         try:
+            at_firstEvent = True
             for iEv in range(firstEvent, firstEvent+eventSize):
-                # if iEv == nEvents:
-                #     break
+                if at_firstEvent:
+                    self.logger.info('processing first event')
+                self.process( iEv )
                 if iEv%100 ==0:
                     # print 'event', iEv
                     if not hasattr(self,'start_time'):
@@ -181,9 +203,14 @@ class Looper(object):
                     else:
                         print 'event %d (%.1f ev/s)' % (iEv, (iEv-self.start_time_event)/float(timeit.default_timer() - self.start_time))
 
-                self.process( iEv )
+                if at_firstEvent:
+                    self.logger.info('done first event')
+                    at_firstEvent = False
                 if iEv<self.nPrint:
                     print self.event
+                if self.stopFlag and self.stopFlag.value:
+                    print 'stopping gracefully at event %d' % (iEv)
+                    break
 
         except UserWarning:
             print 'Stopped loop following a UserWarning exception'
